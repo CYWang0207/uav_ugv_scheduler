@@ -1,0 +1,6 @@
+build/
+generated/
+dashboard/telemetry.json
+dashboard/telemetry.ndjson
+*.ddslog
+__pycache__/

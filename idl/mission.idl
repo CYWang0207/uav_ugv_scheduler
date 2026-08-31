@@ -1,0 +1,164 @@
+// Typed DDS business contract for the UAV/UGV coordination demo.
+// All coordinates are ENU metres in the CAMPUS_LOCAL frame unless stated otherwise.
+
+enum DeviceKind
+{
+    DEVICE_UAV,
+    DEVICE_UGV,
+    DEVICE_COORDINATOR,
+    DEVICE_DASHBOARD
+};
+
+enum TaskKind
+{
+    TASK_SURVEY,
+    TASK_DELIVERY
+};
+
+enum TaskPriority
+{
+    PRIORITY_NORMAL,
+    PRIORITY_HIGH,
+    PRIORITY_CRITICAL
+};
+
+enum VehiclePhase
+{
+    PHASE_IDLE,
+    PHASE_BIDDING,
+    PHASE_ASSIGNED,
+    PHASE_EN_ROUTE,
+    PHASE_EXECUTING,
+    PHASE_COMPLETED,
+    PHASE_FAILED
+};
+
+enum EventKind
+{
+    EVENT_TASK_PUBLISHED,
+    EVENT_BID_SUBMITTED,
+    EVENT_TASK_ASSIGNED,
+    EVENT_PROGRESS,
+    EVENT_TASK_COMPLETED,
+    EVENT_SAFETY_ALERT
+};
+
+enum CoordinateFrame
+{
+    FRAME_WGS84,
+    FRAME_CAMPUS_LOCAL,
+    FRAME_SANDBOX_PIXELS
+};
+
+struct GeoPoint
+{
+    double latitude_deg;
+    double longitude_deg;
+    double altitude_m;
+};
+
+struct LocalPose
+{
+    double east_m;
+    double north_m;
+    double up_m;
+    double heading_deg;
+};
+
+struct TaskRequest
+{
+    string<64> task_id; // @Key
+    string<64> incident_id;
+    TaskKind kind;
+    TaskPriority priority;
+    long revision;
+    string<48> required_capability;
+    GeoPoint target_wgs84;
+    LocalPose target_enu;
+    string<64> predecessor_task_id;
+    double payload_kg;
+    long deadline_s;
+    string<32> frame_id;
+    string<32> map_version;
+    long long created_at_ms;
+};
+
+struct VehicleCapability
+{
+    string<64> agent_id; // @Key
+    DeviceKind device_kind;
+    string<48> primary_capability;
+    double max_payload_kg;
+    double cruise_speed_mps;
+    double battery_percent;
+    LocalPose home_enu;
+    boolean available;
+    long long observed_at_ms;
+};
+
+struct CandidateBid
+{
+    string<64> bid_id; // @Key
+    string<64> task_id;
+    string<64> agent_id;
+    boolean feasible;
+    double eta_s;
+    double cost_score;
+    long bid_ttl_ms;
+    string<96> rationale_code;
+    long long created_at_ms;
+};
+
+struct TaskAssignment
+{
+    string<64> task_id; // @Key
+    string<64> incident_id;
+    string<64> selected_agent_id;
+    string<64> selected_bid_id;
+    double expected_eta_s;
+    long assignment_epoch;
+    string<48> dispatcher_boot_id;
+    boolean accepted;
+    long long assigned_at_ms;
+};
+
+struct VehicleState
+{
+    string<64> agent_id; // @Key
+    string<64> active_task_id;
+    DeviceKind device_kind;
+    VehiclePhase phase;
+    LocalPose pose_enu;
+    string<32> frame_id;
+    string<32> map_version;
+    double battery_percent;
+    double progress_percent;
+    long long updated_at_ms;
+};
+
+struct ExecutionEvent
+{
+    string<80> event_id; // @Key
+    string<64> incident_id;
+    string<64> task_id;
+    string<64> source_agent_id;
+    EventKind kind;
+    TaskPriority severity;
+    string<160> message_code;
+    long long occurred_at_ms;
+};
+
+struct CoordinateTransform
+{
+    string<64> transform_id; // @Key
+    string<64> task_id;
+    CoordinateFrame source_frame;
+    CoordinateFrame target_frame;
+    string<32> frame_id;
+    string<32> map_version;
+    GeoPoint source_wgs84;
+    LocalPose target_enu;
+    double sandbox_x_px;
+    double sandbox_y_px;
+    long long converted_at_ms;
+};

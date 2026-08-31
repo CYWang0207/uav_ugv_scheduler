@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ZRDDS 协同调度沙盘</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ZRDDS / 多智能体应急响应</p>
+        <h1>无人机无人车协同调度</h1>
+      </div>
+      <div class="connection" id="connection-status" aria-live="polite">
+        <span class="status-dot"></span>
+        <span>正在连接遥测桥</span>
+      </div>
+    </header>
+
+    <section class="summary-grid" aria-label="调度摘要">
+      <div class="summary-metric"><span>任务总数</span><strong id="task-count">--</strong></div>
+      <div class="summary-metric"><span>已完成</span><strong id="completed-count">--</strong></div>
+      <div class="summary-metric"><span>在线设备</span><strong id="vehicle-count">--</strong></div>
+      <div class="summary-metric"><span>DDS 域</span><strong id="domain-id">--</strong></div>
+    </section>
+
+    <section class="workspace" aria-label="调度工作区">
+      <section class="panel sandtable-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">实时位置</p>
+            <h2>校园应急沙盘</h2>
+          </div>
+          <span class="frame-badge" id="frame-badge">CAMPUS_LOCAL</span>
+        </div>
+        <div class="sandtable" id="sandtable" aria-label="校园应急响应沙盘">
+          <div class="zone zone-operations">指挥中心</div>
+          <div class="zone zone-clinic">校医院</div>
+          <div class="zone zone-library">图书馆</div>
+          <div class="zone zone-lawn">中央草坪</div>
+          <div class="road road-horizontal"></div>
+          <div class="road road-vertical"></div>
+          <div class="map-legend">
+            <span><i class="legend-marker uav-marker"></i>无人机</span>
+            <span><i class="legend-marker ugv-marker"></i>无人车</span>
+            <span><i class="legend-target"></i>任务目标</span>
+          </div>
+          <div class="map-items" id="map-items"></div>
+        </div>
+        <div class="coordinate-readout" id="coordinate-readout">等待坐标转换</div>
+      </section>
+
+      <aside class="panel vehicle-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">执行状态</p>
+            <h2>智能体设备</h2>
+          </div>
+        </div>
+        <div class="vehicle-list" id="vehicle-list"></div>
+      </aside>
+    </section>
+
+    <section class="lower-grid">
+      <section class="panel task-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">任务编排</p>
+            <h2>依赖与分配</h2>
+          </div>
+        </div>
+        <div class="task-chain" id="task-chain"></div>
+      </section>
+
+      <section class="panel event-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="section-label">DDS 审计事件</p>
+            <h2>执行时间线</h2>
+          </div>
+          <time id="generated-at">--</time>
+        </div>
+        <ol class="event-list" id="event-list"></ol>
+      </section>
+    </section>
+
+    <section class="panel topic-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="section-label">数据空间</p>
+          <h2>Topic 与 QoS</h2>
+        </div>
+        <span class="transport-label" id="transport-label">--</span>
+      </div>
+      <div class="topic-table-wrap">
+        <table>
+          <thead>
+            <tr><th>Topic</th><th>数据</th><th>可靠性</th><th>持久性</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Mission.TaskRequest</td><td>任务请求</td><td>RELIABLE</td><td>TRANSIENT_LOCAL</td></tr>
+            <tr><td>Mission.CandidateBid</td><td>候选报价</td><td>RELIABLE</td><td>VOLATILE</td></tr>
+            <tr><td>Mission.TaskAssignment</td><td>调度分配</td><td>RELIABLE</td><td>TRANSIENT_LOCAL</td></tr>
+            <tr><td>Mission.VehicleState</td><td>设备状态</td><td>RELIABLE</td><td>TRANSIENT_LOCAL</td></tr>
+            <tr><td>Mission.ExecutionEvent</td><td>审计事件</td><td>RELIABLE</td><td>TRANSIENT_LOCAL</td></tr>
+            <tr><td>Mission.CoordinateTransform</td><td>坐标投影</td><td>BEST_EFFORT</td><td>VOLATILE</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

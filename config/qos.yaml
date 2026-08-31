@@ -1,0 +1,40 @@
+# The demo applies these compatible writer/reader policies in src/main.cpp.
+# State replay is deliberately bounded; full audit history belongs in a recorder service.
+domain_id: 42
+profiles:
+  mission_command:
+    topics: [Mission.TaskRequest, Mission.TaskAssignment]
+    reliability: reliable
+    durability: transient_local
+    history: { kind: keep_last, depth: 32 }
+    purpose: "Late-joining coordinator or vehicle receives current pending work."
+  capability:
+    topics: [Mission.VehicleCapability]
+    reliability: reliable
+    durability: transient_local
+    history: { kind: keep_last, depth: 32 }
+    purpose: "Capabilities can be replayed after a late coordinator joins."
+  bid_window:
+    topics: [Mission.CandidateBid]
+    reliability: reliable
+    durability: volatile
+    history: { kind: keep_last, depth: 32 }
+    purpose: "Bids are reliable during one auction window but are not recovered as durable state."
+  execution_state:
+    topics: [Mission.VehicleState]
+    reliability: reliable
+    durability: transient_local
+    history: { kind: keep_last, depth: 16 }
+    purpose: "Dashboard receives the latest durable execution state per vehicle."
+  coordinate_telemetry:
+    topics: [Mission.CoordinateTransform]
+    reliability: best_effort
+    durability: volatile
+    history: { kind: keep_last, depth: 10 }
+    purpose: "The bridge consumes only the newest sandbox projection."
+  audit_event:
+    topics: [Mission.ExecutionEvent]
+    reliability: reliable
+    durability: transient_local
+    history: { kind: keep_last, depth: 128 }
+    purpose: "Dashboard and recorder can reconstruct the demonstration timeline."
