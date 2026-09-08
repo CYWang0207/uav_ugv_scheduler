@@ -462,8 +462,8 @@ private:
         set_text(value.task_id, task_id);
         value.source_frame = FRAME_WGS84;
         value.target_frame = FRAME_CAMPUS_LOCAL;
-        set_text(value.frame_id, "park_enu_v1");
-        set_text(value.map_version, "campus-map-2026.1");
+        set_text(value.frame_id, taskplan::kCanonicalFrameId);
+        set_text(value.map_version, taskplan::kCanonicalMapVersion);
         value.source_wgs84 = source;
         set_pose(value.target_enu, enu);
         value.sandbox_x_px = 80.0 + enu.east_m * 2.8;
@@ -591,8 +591,8 @@ private:
         state.device_kind = kind_;
         state.phase = phase;
         set_pose(state.pose_enu, current_pose_);
-        set_text(state.frame_id, "park_enu_v1");
-        set_text(state.map_version, "campus-map-2026.1");
+        set_text(state.frame_id, taskplan::kCanonicalFrameId);
+        set_text(state.map_version, taskplan::kCanonicalMapVersion);
         state.battery_percent = battery_percent_;
         state.progress_percent = progress_percent;
         state.updated_at_ms = now_ms();

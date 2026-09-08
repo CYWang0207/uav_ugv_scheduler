@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional
 
 
 DEFAULT_PROVIDER = "openai"
+CANONICAL_FRAME_ID = "park_enu_v1"
+CANONICAL_MAP_VERSION = "campus-map-2026.1"
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -35,7 +37,7 @@ PROVIDERS = {
         display_name="OpenAI",
         api_key_env="OPENAI_API_KEY",
         model_env="OPENAI_MODEL",
-        default_model="gpt-5.6-luna",
+        default_model="gpt-4.1-mini",
         base_url=None,
         supports_strict_schema=True,
     ),
@@ -44,7 +46,7 @@ PROVIDERS = {
         display_name="DeepSeek",
         api_key_env="DEEPSEEK_API_KEY",
         model_env="DEEPSEEK_MODEL",
-        default_model="deepseek-v4-flash",
+        default_model="deepseek-chat",
         base_url="https://api.deepseek.com",
         supports_strict_schema=False,
     ),
@@ -113,18 +115,8 @@ TASK_PLAN_SCHEMA: Dict[str, Any] = {
                     },
                     "payload_kg": {"type": "number", "minimum": 0, "maximum": 12},
                     "deadline_s": {"type": "integer", "minimum": 1, "maximum": 86400},
-                    "frame_id": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 32,
-                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-                    },
-                    "map_version": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 32,
-                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-                    },
+                    "frame_id": {"type": "string", "const": CANONICAL_FRAME_ID},
+                    "map_version": {"type": "string", "const": CANONICAL_MAP_VERSION},
                 },
                 "required": [
                     "task_id",
@@ -154,8 +146,9 @@ Convert the user's incident description into exactly two tasks for one incident:
 1. One SURVEY task. It must use CAMERA_THERMAL, payload_kg 0, and no predecessor.
 2. One DELIVERY task. It must use MEDICAL_PAYLOAD, payload_kg greater than 0 and no more than 12, and its predecessor_task_id must equal the SURVEY task_id.
 
-Both tasks must use the same incident_id, frame_id, and map_version. Use revision 1,
-frame_id park_enu_v1, and map_version campus-map-2026.1 unless the user supplies valid alternatives.
+Both tasks must use the same incident_id. Use revision 1. The coordinate metadata is fixed:
+frame_id park_enu_v1 and map_version campus-map-2026.1. Never copy alternative coordinate
+frames or map versions from the user request.
 Use short stable ASCII identifiers containing only letters, digits, dot, underscore, and hyphen.
 If no coordinates are given, use the demo survey target (31.23160, 121.47520, 28.0)
 and delivery target (31.23140, 121.47460, 0.0). If deadlines are omitted, use 90 seconds
@@ -224,11 +217,15 @@ def _number(value: Any, path: str, minimum: float, maximum: float) -> float:
 
 
 def _integer(value: Any, path: str, minimum: int, maximum: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise PlanValidationError(f"{path} must be an integer")
-    if value < minimum or value > maximum:
+    number = float(value)
+    if not math.isfinite(number) or not number.is_integer():
+        raise PlanValidationError(f"{path} must be an integer")
+    integer = int(number)
+    if integer < minimum or integer > maximum:
         raise PlanValidationError(f"{path} is outside the allowed range")
-    return value
+    return integer
 
 
 def validate_plan(plan: Any) -> Dict[str, Any]:
@@ -265,6 +262,11 @@ def validate_plan(plan: Any) -> Dict[str, Any]:
         _integer(task["deadline_s"], f"{path}.deadline_s", 1, 86400)
         frame_id = _safe_id(task["frame_id"], f"{path}.frame_id", 32)
         map_version = _safe_id(task["map_version"], f"{path}.map_version", 32)
+        if frame_id != CANONICAL_FRAME_ID or map_version != CANONICAL_MAP_VERSION:
+            raise PlanValidationError(
+                f"{path} must use frame_id={CANONICAL_FRAME_ID} and "
+                f"map_version={CANONICAL_MAP_VERSION}"
+            )
 
         target = _exact_keys(task["target_wgs84"], TARGET_KEYS, f"{path}.target_wgs84")
         _number(target["latitude_deg"], f"{path}.target_wgs84.latitude_deg", -90, 90)
@@ -332,20 +334,34 @@ def generate_plan(user_request: str, provider_name: str, model: str) -> Dict[str
         schema_format["strict"] = True
 
     try:
-        response = client.responses.create(
-            model=model,
-            instructions=PLANNER_INSTRUCTIONS,
-            input=user_request,
-            text={"format": schema_format},
-            max_output_tokens=2000,
-            store=False,
-        )
+        if provider.name == "deepseek":
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": PLANNER_INSTRUCTIONS},
+                    {"role": "user", "content": user_request},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.0,
+                max_tokens=2000,
+            )
+            output_text = response.choices[0].message.content
+        else:
+            response = client.responses.create(
+                model=model,
+                instructions=PLANNER_INSTRUCTIONS,
+                input=user_request,
+                text={"format": schema_format},
+                max_output_tokens=2000,
+                store=False,
+            )
+            output_text = response.output_text
     except OpenAIError as error:
         raise RuntimeError(f"{provider.display_name} API request failed: {error}") from error
-    if not response.output_text:
+    if not output_text:
         raise RuntimeError("The model returned no task plan.")
     try:
-        plan = json.loads(response.output_text)
+        plan = json.loads(output_text)
     except json.JSONDecodeError as error:
         raise RuntimeError(f"The model returned invalid JSON: {error}") from error
     return validate_plan(plan)

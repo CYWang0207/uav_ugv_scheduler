@@ -1,13 +1,16 @@
 # 基于 ZRDDS 的 LLM 多智能体无人机无人车任务调度
 
-这是一个可运行的 ZRDDS C++ 沙盘仿真：Python 规划器可切换调用 OpenAI 或 DeepSeek API，把自然语言事故描述转换成严格的 JSON 任务计划；C++ `StructuredPlanner` 校验并读取该计划，再沿原有 DDS 调度链路发布 `TaskRequest`。无人机先执行热成像勘测，勘测完成后，无人车才接收医疗物资投送任务。
+仓库包含两个边界明确的运行入口：
 
-该工程演示 LLM 到 DDS 的结构化适配、DDS 数据面和调度算法，不连接真实飞控或车辆底盘。
+- `master_agent/` 是当前总 Agent：接收网页对话，通过 OpenAI 或 DeepSeek 把指令解析为 `uwb_map` 下的结构化任务，然后由确定性调度器选设备并驱动任务状态机。LLM 不负责设备选择和安全决策。
+- 根目录的 C++ `StructuredPlanner` 是旧版 ZRDDS 演示入口：它只读取已校验的 `task_plan.json`。`llm_planner.py` 仅是给这个旧 Demo 生成兼容 JSON 的辅助工具，不是第二个总 Agent。
 
-## 架构
+两条链路都不会将自然语言直接发送给设备，也不连接真实飞控或车辆底盘。
+
+## 旧版 ZRDDS Demo 架构
 
 ```
-自然语言 -> llm_planner.py -> task_plan.json -> StructuredPlanner --TaskRequest-->
+可选兼容工具 llm_planner.py -> task_plan.json -> StructuredPlanner --TaskRequest-->
                                                 |                          |
                                                 +-> CoordinateService -----+
                                                 +-> UAV / UGV --CandidateBid--> Coordinator
@@ -16,7 +19,7 @@
 UAV / UGV --VehicleState, ExecutionEvent--> DashboardBridge --> telemetry.json --> Browser
 ```
 
-- `llm_planner.py`：根据 `LLM_PROVIDER` 读取 `OPENAI_API_KEY` 或 `DEEPSEEK_API_KEY`，使用 Responses API 的 JSON Schema 输出生成计划，并在写文件前再次做严格业务校验。
+- `llm_planner.py`：仅为旧 Demo 导出 JSON。OpenAI 使用 Responses API 与严格 JSON Schema；DeepSeek 使用其兼容的 Chat Completions 和 JSON Object 输出，两者最终都经过相同业务校验。
 - `StructuredPlanner`：读取 JSON 文件，在 C++ 侧再次校验字段、范围、能力和依赖关系，再映射到 `TaskRequest`；自然语言不会直接进入 DDS。
 - `CoordinateService`：使用固定校园原点把 WGS84 经纬高转换为 ENU 米制坐标，并把 ENU 投影到 640 x 440 沙盘像素。
 - `VehicleAgent`：分别模拟 UAV 与 UGV 的能力上报、报价、任务接收和执行状态。
@@ -44,7 +47,7 @@ IDL 位于 [idl/mission.idl](idl/mission.idl)，QoS 说明位于 [config/qos.yam
 - 输入：WGS84，`latitude_deg`、`longitude_deg`、`altitude_m`。
 - 任务空间：`park_enu_v1` / `CAMPUS_LOCAL`，东、北、天（ENU），单位米。
 - 沙盘：原点左上，`x = 80 + 2.8 * east`，`y = 440 - 2.8 * north`，单位像素。
-- `frame_id` 与 `map_version` 随任务、设备状态和转换结果发送，避免不同地图版本或坐标系混用。
+- 旧 Demo 的 `frame_id` 固定为 `park_enu_v1`，`map_version` 固定为 `campus-map-2026.1`。LLM 不能改写它们，任务、坐标转换和设备状态必须使用同一组值。
 
 ## 实体沙盘地图资产
 
@@ -65,7 +68,11 @@ IDL 位于 [idl/mission.idl](idl/mission.idl)，QoS 说明位于 [config/qos.yam
 python .\tests\verify_sandbox_map.py
 ```
 
-## 本地运行
+## 运行总 Agent（推荐）
+
+总 Agent 支持 `LLM_PROVIDER=deepseek` 和 `LLM_PROVIDER=openai`。对应 API Key 未配置、超时或接口失败时，会自动降级到本地坐标正则解析，不会中断服务。启动和联调说明见 [`master_agent/README.md`](master_agent/README.md)。
+
+## 运行旧版 ZRDDS Demo
 
 以下步骤在 Windows PowerShell 中执行。API Key 只写入当前 PowerShell 进程的环境变量，不要把真实值写入 `.env.example`、源代码或提交记录。
 
@@ -76,12 +83,12 @@ py -m venv .venv
 # 二选一：OpenAI
 $env:LLM_PROVIDER="openai"
 $env:OPENAI_API_KEY="你的 OpenAI API Key"
-# 可选：$env:OPENAI_MODEL="gpt-5.6-luna"
+# 可选：$env:OPENAI_MODEL="gpt-4.1-mini"
 
 # 或者 DeepSeek（如果选择它，就不需要设置 OPENAI_API_KEY）
 # $env:LLM_PROVIDER="deepseek"
 # $env:DEEPSEEK_API_KEY="你的 DeepSeek API Key"
-# 可选：$env:DEEPSEEK_MODEL="deepseek-v4-flash"
+# 可选：$env:DEEPSEEK_MODEL="deepseek-chat"
 
 .\.venv\Scripts\python.exe .\llm_planner.py "前方发生事故，先让无人机热成像侦察，再让无人车送2.5kg医疗物资"
 ```
@@ -91,13 +98,13 @@ $env:OPENAI_API_KEY="你的 OpenAI API Key"
 也可以不改环境变量，临时在命令中指定供应商和模型：
 
 ```powershell
-.\.venv\Scripts\python.exe .\llm_planner.py --provider deepseek --model deepseek-v4-flash "前方发生事故，先侦察再送医疗物资"
+.\.venv\Scripts\python.exe .\llm_planner.py --provider deepseek --model deepseek-chat "前方发生事故，先侦察再送医疗物资"
 ```
 
 ```powershell
 .\scripts\build.ps1 -Configuration Debug
 .\scripts\run_demo.ps1
-python .\tests\verify_telemetry.py
+python .\tests\verify_telemetry.py --task-plan .\task_plan.json
 .\scripts\serve_dashboard.ps1 -Port 8765
 ```
 

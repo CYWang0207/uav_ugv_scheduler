@@ -30,7 +30,7 @@ public:
     explicit JsonParser(const std::string& input) : input_(input) {}
 
     JsonValue parse() {
-        JsonValue result = parse_value();
+        JsonValue result = parse_value(0);
         skip_whitespace();
         if (position_ != input_.size()) {
             fail("unexpected content after the JSON value");
@@ -68,14 +68,17 @@ private:
         }
     }
 
-    JsonValue parse_value() {
+    JsonValue parse_value(std::size_t depth) {
         skip_whitespace();
+        if (depth > 64) {
+            fail("maximum nesting depth exceeded");
+        }
         if (position_ >= input_.size()) {
             fail("expected a JSON value");
         }
         switch (input_[position_]) {
-            case '{': return parse_object();
-            case '[': return parse_array();
+            case '{': return parse_object(depth + 1);
+            case '[': return parse_array(depth + 1);
             case '"': {
                 JsonValue value;
                 value.type = JsonType::String;
@@ -93,7 +96,7 @@ private:
         }
     }
 
-    JsonValue parse_object() {
+    JsonValue parse_object(std::size_t depth) {
         expect('{');
         JsonValue value;
         value.type = JsonType::Object;
@@ -107,7 +110,7 @@ private:
             }
             std::string key = parse_string();
             expect(':');
-            const auto inserted = value.object.emplace(key, parse_value());
+            const auto inserted = value.object.emplace(key, parse_value(depth));
             if (!inserted.second) {
                 fail("duplicate object property: " + key);
             }
@@ -118,7 +121,7 @@ private:
         }
     }
 
-    JsonValue parse_array() {
+    JsonValue parse_array(std::size_t depth) {
         expect('[');
         JsonValue value;
         value.type = JsonType::Array;
@@ -126,7 +129,7 @@ private:
             return value;
         }
         while (true) {
-            value.array.push_back(parse_value());
+            value.array.push_back(parse_value(depth));
             if (consume(']')) {
                 return value;
             }
@@ -404,6 +407,12 @@ Task parse_task(const JsonValue& value, std::size_t index) {
     task.deadline_s = require_integer(value, "deadline_s", path, 1, 86400);
     task.frame_id = require_string(value, "frame_id", path, 32);
     task.map_version = require_string(value, "map_version", path, 32);
+
+    if (task.frame_id != kCanonicalFrameId || task.map_version != kCanonicalMapVersion) {
+        throw std::runtime_error(
+            "Invalid task plan: " + path + " must use frame_id=" + kCanonicalFrameId +
+            " and map_version=" + kCanonicalMapVersion);
+    }
 
     require_safe_identifier(task.task_id, path + ".task_id");
     require_safe_identifier(task.incident_id, path + ".incident_id");

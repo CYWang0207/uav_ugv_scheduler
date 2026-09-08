@@ -1,5 +1,6 @@
 """Validate the end-to-end DDS demo snapshot without third-party packages."""
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -14,10 +15,18 @@ def events_for(events: List[Dict], task_id: str, kind: str) -> List[Dict]:
     return [event for event in events if event.get("task_id") == task_id and event.get("kind") == kind]
 
 
-def main() -> int:
+def parse_args() -> argparse.Namespace:
     root = Path(__file__).resolve().parents[1]
-    snapshot = root / "dashboard" / "telemetry.json"
-    plan_path = root / "task_plan.json"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--snapshot", type=Path, default=root / "dashboard" / "telemetry.json")
+    parser.add_argument("--task-plan", type=Path, default=root / "task_plan.json")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    snapshot = args.snapshot
+    plan_path = args.task_plan
     if not snapshot.is_file():
         fail(f"Missing snapshot: {snapshot}. Run scripts/run_demo.ps1 first.")
     if not plan_path.is_file():

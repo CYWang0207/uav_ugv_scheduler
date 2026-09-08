@@ -6,6 +6,9 @@
 
 namespace taskplan {
 
+inline constexpr const char* kCanonicalFrameId = "park_enu_v1";
+inline constexpr const char* kCanonicalMapVersion = "campus-map-2026.1";
+
 struct GeoTarget {
     double latitude_deg = 0.0;
     double longitude_deg = 0.0;

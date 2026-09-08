@@ -30,6 +30,28 @@ class ProviderRequestTests(unittest.TestCase):
 
         def handle(request: httpx.Request) -> httpx.Response:
             captured["body"] = json.loads(request.content)
+            captured["path"] = request.url.path
+            if provider == "deepseek":
+                return httpx.Response(
+                    200,
+                    request=request,
+                    json={
+                        "id": "chatcmpl_test",
+                        "object": "chat.completion",
+                        "created": 0,
+                        "model": model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {
+                                    "role": "assistant",
+                                    "content": json.dumps(expected_plan),
+                                },
+                                "finish_reason": "stop",
+                            }
+                        ],
+                    },
+                )
             return httpx.Response(
                 200,
                 request=request,
@@ -68,16 +90,18 @@ class ProviderRequestTests(unittest.TestCase):
             client.close()
 
         self.assertEqual(actual_plan, expected_plan)
-        return captured["body"], expected_plan, constructor
+        return captured, expected_plan, constructor
 
     def test_openai_request_uses_strict_json_schema(self) -> None:
-        body, _, constructor = self.exercise_provider(
+        captured, _, constructor = self.exercise_provider(
             provider="openai",
-            model="gpt-5.6-luna",
+            model="openai-test-model",
             api_key_env="OPENAI_API_KEY",
             base_url="https://api.openai.com/v1",
         )
-        self.assertEqual(body["model"], "gpt-5.6-luna")
+        body = captured["body"]
+        self.assertEqual(captured["path"], "/v1/responses")
+        self.assertEqual(body["model"], "openai-test-model")
         self.assertFalse(body["store"])
         self.assertEqual(body["text"]["format"]["type"], "json_schema")
         self.assertTrue(body["text"]["format"]["strict"])
@@ -85,15 +109,17 @@ class ProviderRequestTests(unittest.TestCase):
         constructor.assert_called_once_with(api_key="test-only")
 
     def test_deepseek_request_uses_compatible_endpoint_and_schema(self) -> None:
-        body, _, constructor = self.exercise_provider(
+        captured, _, constructor = self.exercise_provider(
             provider="deepseek",
-            model="deepseek-v4-flash",
+            model="deepseek-test-model",
             api_key_env="DEEPSEEK_API_KEY",
             base_url="https://api.deepseek.com",
         )
-        self.assertEqual(body["model"], "deepseek-v4-flash")
-        self.assertEqual(body["text"]["format"]["type"], "json_schema")
-        self.assertNotIn("strict", body["text"]["format"])
+        body = captured["body"]
+        self.assertEqual(captured["path"], "/chat/completions")
+        self.assertEqual(body["model"], "deepseek-test-model")
+        self.assertEqual(body["response_format"], {"type": "json_object"})
+        self.assertEqual(body["temperature"], 0.0)
         constructor.assert_called_once_with(
             api_key="test-only", base_url="https://api.deepseek.com"
         )

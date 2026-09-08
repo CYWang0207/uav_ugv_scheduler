@@ -48,7 +48,20 @@ class TaskPlanValidationTests(unittest.TestCase):
         provider = resolve_provider("DeepSeek")
         self.assertEqual(provider.api_key_env, "DEEPSEEK_API_KEY")
         self.assertEqual(provider.base_url, "https://api.deepseek.com")
-        self.assertEqual(resolve_model(provider), "deepseek-v4-flash")
+        self.assertEqual(resolve_model(provider), "deepseek-chat")
+
+    def test_integral_json_numbers_are_accepted_for_integer_fields(self) -> None:
+        plan = copy.deepcopy(self.plan)
+        plan["tasks"][0]["revision"] = 1.0
+        plan["tasks"][0]["deadline_s"] = 90.0
+        self.assertIs(validate_plan(plan), plan)
+
+    def test_coordinate_metadata_cannot_be_generated_by_the_llm(self) -> None:
+        plan = copy.deepcopy(self.plan)
+        for task in plan["tasks"]:
+            task["frame_id"] = "another_map"
+        with self.assertRaisesRegex(PlanValidationError, "frame_id=park_enu_v1"):
+            validate_plan(plan)
 
     def test_explicit_model_overrides_environment(self) -> None:
         provider = resolve_provider("openai")

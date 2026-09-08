@@ -13,7 +13,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $SdkRoot 'zrddslicence.lic'))) {
     throw "ZRDDS license file not found under SDK root: $SdkRoot"
 }
 if (-not (Test-Path -LiteralPath $TaskPlan)) {
-    throw "Task plan not found: $TaskPlan. Run llm_planner.py first."
+    throw "Task plan not found: $TaskPlan. Run llm_planner.py, or copy task_plan.example.json to task_plan.json for an offline run."
 }
 
 $previousZrddsHome = $env:ZRDDS_HOME
