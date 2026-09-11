@@ -308,13 +308,13 @@ const JsonValue& require_type(const JsonValue& value, JsonType type, const std::
     return value;
 }
 
-const JsonValue& require_property(const JsonValue& object, const std::string& name, const std::string& path) {
+const JsonValue* require_property(const JsonValue& object, const std::string& name, const std::string& path) {
     require_type(object, JsonType::Object, path);
     const auto found = object.object.find(name);
     if (found == object.object.end()) {
         throw std::runtime_error("Invalid task plan: missing " + path + "." + name);
     }
-    return found->second;
+    return &found->second;
 }
 
 void require_exact_properties(
@@ -337,7 +337,8 @@ std::string require_string(
     const std::string& path,
     std::size_t max_length,
     bool allow_empty = false) {
-    const JsonValue& value = require_type(require_property(object, name, path), JsonType::String, path + "." + name);
+    const JsonValue& property = *require_property(object, name, path);
+    const JsonValue& value = require_type(property, JsonType::String, path + "." + name);
     if ((!allow_empty && value.string.empty()) || value.string.size() > max_length) {
         throw std::runtime_error("Invalid task plan: " + path + "." + name + " has an invalid length");
     }
@@ -350,7 +351,8 @@ double require_number(
     const std::string& path,
     double minimum,
     double maximum) {
-    const JsonValue& value = require_type(require_property(object, name, path), JsonType::Number, path + "." + name);
+    const JsonValue& property = *require_property(object, name, path);
+    const JsonValue& value = require_type(property, JsonType::Number, path + "." + name);
     if (value.number < minimum || value.number > maximum) {
         throw std::runtime_error("Invalid task plan: " + path + "." + name + " is outside the allowed range");
     }
@@ -422,7 +424,7 @@ Task parse_task(const JsonValue& value, std::size_t index) {
         require_safe_identifier(task.predecessor_task_id, path + ".predecessor_task_id");
     }
 
-    const JsonValue& target = require_property(value, "target_wgs84", path);
+    const JsonValue& target = *require_property(value, "target_wgs84", path);
     require_exact_properties(target, {"latitude_deg", "longitude_deg", "altitude_m"}, path + ".target_wgs84");
     task.target_wgs84.latitude_deg = require_number(target, "latitude_deg", path + ".target_wgs84", -90.0, 90.0);
     task.target_wgs84.longitude_deg = require_number(target, "longitude_deg", path + ".target_wgs84", -180.0, 180.0);
@@ -490,7 +492,8 @@ void validate_plan(const Plan& plan) {
 Plan parse_json(const std::string& json) {
     const JsonValue root = JsonParser(json).parse();
     require_exact_properties(root, {"tasks"}, "root");
-    const JsonValue& tasks = require_type(require_property(root, "tasks", "root"), JsonType::Array, "root.tasks");
+    const JsonValue& tasks_property = *require_property(root, "tasks", "root");
+    const JsonValue& tasks = require_type(tasks_property, JsonType::Array, "root.tasks");
     Plan plan;
     plan.tasks.reserve(tasks.array.size());
     for (std::size_t index = 0; index < tasks.array.size(); ++index) {
