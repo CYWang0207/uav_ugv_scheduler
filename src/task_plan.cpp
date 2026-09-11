@@ -301,11 +301,10 @@ private:
     std::size_t position_ = 0;
 };
 
-const JsonValue& require_type(const JsonValue& value, JsonType type, const std::string& path) {
+void require_type(const JsonValue& value, JsonType type, const std::string& path) {
     if (value.type != type) {
         throw std::runtime_error("Invalid task plan: " + path + " has the wrong JSON type");
     }
-    return value;
 }
 
 const JsonValue* require_property(const JsonValue& object, const std::string& name, const std::string& path) {
@@ -337,8 +336,8 @@ std::string require_string(
     const std::string& path,
     std::size_t max_length,
     bool allow_empty = false) {
-    const JsonValue& property = *require_property(object, name, path);
-    const JsonValue& value = require_type(property, JsonType::String, path + "." + name);
+    const JsonValue& value = *require_property(object, name, path);
+    require_type(value, JsonType::String, path + "." + name);
     if ((!allow_empty && value.string.empty()) || value.string.size() > max_length) {
         throw std::runtime_error("Invalid task plan: " + path + "." + name + " has an invalid length");
     }
@@ -351,8 +350,8 @@ double require_number(
     const std::string& path,
     double minimum,
     double maximum) {
-    const JsonValue& property = *require_property(object, name, path);
-    const JsonValue& value = require_type(property, JsonType::Number, path + "." + name);
+    const JsonValue& value = *require_property(object, name, path);
+    require_type(value, JsonType::Number, path + "." + name);
     if (value.number < minimum || value.number > maximum) {
         throw std::runtime_error("Invalid task plan: " + path + "." + name + " is outside the allowed range");
     }
@@ -492,8 +491,8 @@ void validate_plan(const Plan& plan) {
 Plan parse_json(const std::string& json) {
     const JsonValue root = JsonParser(json).parse();
     require_exact_properties(root, {"tasks"}, "root");
-    const JsonValue& tasks_property = *require_property(root, "tasks", "root");
-    const JsonValue& tasks = require_type(tasks_property, JsonType::Array, "root.tasks");
+    const JsonValue& tasks = *require_property(root, "tasks", "root");
+    require_type(tasks, JsonType::Array, "root.tasks");
     Plan plan;
     plan.tasks.reserve(tasks.array.size());
     for (std::size_t index = 0; index < tasks.array.size(); ++index) {
